@@ -1,0 +1,58 @@
+import java.io.*;
+import java.net.*;
+
+
+public class TCPClient {
+    public static void main(String[] args) throws IOException {
+
+        int portNumber = 55555;
+        String hostName = "localhost";
+        Socket socket = null;
+        PrintWriter out = null;
+        BufferedReader in = null;
+
+        try {
+
+            socket = new Socket(hostName, portNumber);
+            out = new PrintWriter(socket.getOutputStream(), true);
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+        } catch (IOException e) {
+            System.err.println("Couldn't connect to router: " + hostName);
+            System.exit(1);
+        }
+
+        System.out.println("Connected to ServerRouter.");
+
+        String fromClient;
+        String fromServer;
+
+        fromClient = readFromFile("file.txt");
+
+        long clockStart = System.nanoTime();
+        System.out.println("Client: Sending message -> " + fromClient);
+        out.println(fromClient);
+
+
+        fromServer = in.readLine();  // Receive response from server
+        if (fromServer != null) {
+            System.out.println("Client: Received response -> " + fromServer);
+        }
+        long clockEnd = System.nanoTime();
+
+        System.out.println("Execution for the message '" + fromClient + "' takes " + (clockEnd - clockStart)/1000 + " microseconds");
+
+        out.close();
+        in.close();
+        socket.close();
+    }
+
+    public static String readFromFile(String filepath) throws IOException {
+
+        Reader reader = new FileReader(filepath);
+        BufferedReader fromFile =  new BufferedReader(reader);
+
+        return fromFile.readLine();
+
+    }
+}
