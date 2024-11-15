@@ -1,21 +1,16 @@
-import java.net.*;
 import java.io.*;
+import java.net.*;
+import java.util.*;
 
 public class SThread extends Thread {
 	private Socket clientSocket;
 	private Socket serverSocket;
-	private Object[][] routingTable;
-
 	private PrintWriter clientOut;
 	private BufferedReader clientIn;
-
-	private PrintWriter serverOut;
-	private BufferedReader serverIn;
 
 	public SThread(Socket clientSocket, Socket serverSocket) {
 		this.clientSocket = clientSocket;
 		this.serverSocket = serverSocket;
-		this.routingTable = routingTable;
 	}
 
 	public void run() {
@@ -23,52 +18,58 @@ public class SThread extends Thread {
 			clientOut = new PrintWriter(clientSocket.getOutputStream(), true);
 			clientIn = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
 
-			String fromClient;
-			String toClient;
-
-			serverOut = new PrintWriter(serverSocket.getOutputStream(), true);
-			serverIn = new BufferedReader(new InputStreamReader(serverSocket.getInputStream()));
-
-			String fromServer;
-			String toServer;
-
-			fromClient = clientIn.readLine();
-
-			if(fromClient != null){
-				System.out.println("Thread: Received message from Client -> " + fromClient);
+			String fromClient = clientIn.readLine();
+			if ("MULTIPLY MATRICES".equals(fromClient)) {
+				List<int[][]> matrices = readMatricesFromFile("file.txt");
+				if (matrices.size() >= 2) {
+					int[][] result = MatrixUtils.strassenMultiply(matrices.get(0), matrices.get(1));
+					clientOut.println(matrixToString(result));
+				} else {
+					clientOut.println("Error: Not enough matrices found in file.");
+				}
 			}
-
-			toServer = fromClient;
-
-			System.out.println("Thread: Forwarding message to Server ->" + toServer);
-			serverOut.println(toServer);
-
-			/////
-
-			fromServer = serverIn.readLine();
-
-			if (fromServer != null) {
-				System.out.println("Thread: Received message from Server -> " + fromServer);
-			}
-
-			toClient = fromServer;
-
-			System.out.println("Thread: Forwarding message to Client -> " + toClient);
-			clientOut.println(toClient);
 		} catch (IOException e) {
-			System.err.println("Error in communication.");
+			System.err.println("Communication error.");
 			e.printStackTrace();
 		} finally {
 			try {
 				clientIn.close();
 				clientOut.close();
 				clientSocket.close();
-				serverIn.close();
-				serverOut.close();
 				serverSocket.close();
 			} catch (IOException e) {
-				System.err.println("Couldn't close connection properly.");
+				System.err.println("Couldn't close connection.");
 			}
 		}
+	}
+
+	private List<int[][]> readMatricesFromFile(String filename) throws IOException {
+		List<int[][]> matrices = new ArrayList<>();
+		try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
+			List<int[]> currentMatrix = new ArrayList<>();
+			String line;
+			while ((line = br.readLine()) != null) {
+				if (line.trim().isEmpty()) {
+					if (!currentMatrix.isEmpty()) {
+						matrices.add(currentMatrix.toArray(new int[0][]));
+						currentMatrix.clear();
+					}
+				} else {
+					currentMatrix.add(Arrays.stream(line.split("\\s+")).mapToInt(Integer::parseInt).toArray());
+				}
+			}
+			if (!currentMatrix.isEmpty()) {
+				matrices.add(currentMatrix.toArray(new int[0][]));
+			}
+		}
+		return matrices;
+	}
+
+	private String matrixToString(int[][] matrix) {
+		StringBuilder sb = new StringBuilder();
+		for (int[] row : matrix) {
+			sb.append(Arrays.toString(row)).append("\n");
+		}
+		return sb.toString();
 	}
 }
