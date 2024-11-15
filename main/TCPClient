@@ -1,58 +1,83 @@
 import java.io.*;
-import java.net.*;
-
+import java.util.*;
 
 public class TCPClient {
-    public static void main(String[] args) throws IOException {
 
-        int portNumber = 55555;
-        String hostName = "localhost";
-        Socket socket = null;
-        PrintWriter out = null;
-        BufferedReader in = null;
+    public static List<int[][]> readMatricesFromFile(String filename) {
+        List<int[][]> matrices = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
+            List<int[]> currentMatrix = new ArrayList<>();
+            String line;
 
-        try {
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) {
+                    if (!currentMatrix.isEmpty()) {
+                        matrices.add(currentMatrix.toArray(new int[0][]));
+                        currentMatrix.clear();
+                    }
+                } else {
+                    try {
+                        currentMatrix.add(Arrays.stream(line.split("\\s+")).mapToInt(Integer::parseInt).toArray());
+                    } catch (NumberFormatException e) {
+                        System.out.println("Error parsing line: " + line);
+                    }
+                }
+            }
 
-            socket = new Socket(hostName, portNumber);
-            out = new PrintWriter(socket.getOutputStream(), true);
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            // Add last matrix if file does not end with a blank line
+            if (!currentMatrix.isEmpty()) {
+                matrices.add(currentMatrix.toArray(new int[0][]));
+            }
 
+            System.out.println("Total matrices read: " + matrices.size());
         } catch (IOException e) {
-            System.err.println("Couldn't connect to router: " + hostName);
-            System.exit(1);
+            System.out.println("Error reading file: " + e.getMessage());
+            e.printStackTrace();
         }
 
-        System.out.println("Connected to ServerRouter.");
-
-        String fromClient;
-        String fromServer;
-
-        fromClient = readFromFile("file.txt");
-
-        long clockStart = System.nanoTime();
-        System.out.println("Client: Sending message -> " + fromClient);
-        out.println(fromClient);
-
-
-        fromServer = in.readLine();  // Receive response from server
-        if (fromServer != null) {
-            System.out.println("Client: Received response -> " + fromServer);
-        }
-        long clockEnd = System.nanoTime();
-
-        System.out.println("Execution for the message '" + fromClient + "' takes " + (clockEnd - clockStart)/1000 + " microseconds");
-
-        out.close();
-        in.close();
-        socket.close();
+        return matrices;
     }
+    public static void main(String[] args) {
+        // Read matrices from file
+        List<int[][]> matrices = readMatricesFromFile("main/file.txt");
 
-    public static String readFromFile(String filepath) throws IOException {
+        if (matrices.size() < 2) {
+            System.out.println("Error: File should contain at least two matrices.");
+            return;
+        }
 
-        Reader reader = new FileReader(filepath);
-        BufferedReader fromFile =  new BufferedReader(reader);
+        int[][] matrixA = matrices.get(0);
+        int[][] matrixB = matrices.get(1);
 
-        return fromFile.readLine();
+        // Ensure matrices are square and of the same size
+        int n = matrixA.length;
+        if (matrixA.length != matrixA[0].length || matrixB.length != matrixB[0].length || matrixA.length != matrixB.length) {
+            System.out.println("Error: Matrices should be square and of the same size.");
+            return;
+        }
 
+        // Start timing
+        long startTime = System.nanoTime();
+
+        // Perform Strassen multiplication
+        int[][] result = MatrixUtils.strassenMultiply(matrixA, matrixB);
+
+        // End timing
+        long endTime = System.nanoTime();
+        long duration = endTime - startTime; // Time in nanoseconds
+        double durationInMillis = duration / 1_000_000.0; // Convert to milliseconds
+
+        // Print the result
+        System.out.println("Result of Strassen Multiplication:");
+        for (int[] row : result) {
+            for (int elem : row) {
+                System.out.print(elem + " ");
+            }
+            System.out.println();
+        }
+
+        // Print the time taken
+        System.out.println("\nTime taken for Strassen multiplication: " + durationInMillis + " ms");
     }
 }
