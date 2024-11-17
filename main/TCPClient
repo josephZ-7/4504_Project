@@ -6,101 +6,126 @@ import java.util.List;
 
 
 public class TCPClient {
-    public static void main(String[] args) throws IOException, ClassNotFoundException {
+	public static void main(String[] args) throws IOException, ClassNotFoundException {
 
-        int portNumber = 55555;
-        int matrixSize = 256;     // This should be either 16, 32, 64, 128, or 256
-        int numberOfMatrices = 4; // This should be either 2, 4, 8, 16, or 32
-        String hostName = "localhost";
-        Socket socket = null;
-        ObjectOutputStream out = null;
-        ObjectInputStream in = null;
+		int portNumber = 55555;
+		int matrixSize = 32;     // This should be either 16, 32, 64, 128, or 256
+		int numberOfMatrices = 4; // This should be either 2, 4, 8, 16, or 32
+		int threadCount = 31; // This should match the cores used by the TCPServer
+		String hostName = "localhost";
+		Socket socket = null;
+		ObjectOutputStream out = null;
+		ObjectInputStream in = null;
 
-        try {
+		try {
 
-            socket = new Socket(hostName, portNumber);
-            out = new ObjectOutputStream(socket.getOutputStream());
-            in = new ObjectInputStream(socket.getInputStream());
+			socket = new Socket(hostName, portNumber);
+			out = new ObjectOutputStream(socket.getOutputStream());
+			in = new ObjectInputStream(socket.getInputStream());
 
-        } catch (IOException e) {
-            System.err.println("Couldn't connect to router: " + hostName);
-            System.exit(1);
-        }
+		} catch (IOException e) {
+			System.err.println("Couldn't connect to router: " + hostName);
+			System.exit(1);
+		}
 
-        System.out.println("Connected to ServerRouter.");
-
-        List<int[][]> fromClient = new ArrayList<>();
-
-        generateMatrices(fromClient, matrixSize, numberOfMatrices);
+		System.out.println("Connected to ServerRouter.");
 
 
-/*
-        Undoing this comment block will make the client print every matrix out before it's sent.
-        Fine for smaller configurations (4x4, 2 matrixes)...
-        Gets out of hand with larger ones (256x256, 32 matrixes)...
+		// Generate matrices
+		List<int[][]> fromClient = new ArrayList<>();
+		generateMatrices(fromClient, matrixSize, numberOfMatrices);
 
-        for(int[][] matrix : fromClient){
-            for (int i = 0; i < matrixSize; i++) {
-                for (int j = 0; j < matrixSize; j++) {
-                    System.out.print(matrix[i][j] + " ");
-                }
-                System.out.println();
-            }
-            System.out.println();
-            System.out.println();
-            System.out.println();
-        }
+		// First calculation (single thread)
+		System.out.println("Client: Sending " + numberOfMatrices + ", " + matrixSize + " x " + matrixSize + " matrices for single-threaded calculation.");
+		long singleThreadStart = System.nanoTime();
+		out.writeObject(fromClient);
 
-*/
+		int[][] singleThreadResult = (int[][]) in.readObject();
+		long singleThreadEnd = System.nanoTime();
 
-        int[][] fromServer;
+		// Reconnect for second calculation
+		try {
+			socket = new Socket(hostName, portNumber);
+			out = new ObjectOutputStream(socket.getOutputStream());
+			in = new ObjectInputStream(socket.getInputStream());
+		} catch (IOException e) {
+			System.err.println("Couldn't reconnect to router: " + hostName);
+			System.exit(1);
+		}
 
-        long clockStart = System.nanoTime();
+		// Second calculation (multi-thread)
+		System.out.println("Client: Sending " + numberOfMatrices + ", " + matrixSize + " x " + matrixSize + " matrices for multi-threaded calculation with " + threadCount + " threads.");
+		long multiThreadStart = System.nanoTime();
+		out.writeObject(fromClient);
 
-        System.out.println("Client: Sending " + numberOfMatrices + ", " + matrixSize + " x " + matrixSize + " matrices.");
+		int[][] multiThreadResult = (int[][]) in.readObject();
+		long multiThreadEnd = System.nanoTime();
 
-        out.writeObject(fromClient);
+		// Calculate timings including network overhead
+		double singleThreadTime = (singleThreadEnd - singleThreadStart) / 1_000_000.0;
+		double multiThreadTime = (multiThreadEnd - multiThreadStart) / 1_000_000.0;
 
+		// Print timing results
+		System.out.println("\nClient-side Performance Results:");
+		System.out.println("Single-threaded total time: " + singleThreadTime + " ms");
+		System.out.println("Multi-threaded total time: " + multiThreadTime + " ms");
+		System.out.println("Overall speedup: " + String.format("%.2fx", singleThreadTime / multiThreadTime));
+		System.out.println("Efficiency: " + String.format("%.2fx", singleThreadTime / (multiThreadTime * threadCount)));
 
-        fromServer = (int[][]) in.readObject();
+		// Verify results match
+		boolean resultsMatch = compareMatrices(singleThreadResult, multiThreadResult);
+		System.out.println("\nResults match: " + resultsMatch);
 
-        long clockEnd = 0;
-        if (fromServer != null) {
+		// Optional: Print matrices for verification (commented out for large matrices)
+		/*
+        System.out.println("\nSingle-threaded result:");
+        printMatrix(singleThreadResult);
+        System.out.println("\nMulti-threaded result:");
+        printMatrix(multiThreadResult);
+		 */
 
-            clockEnd = System.nanoTime();
-            System.out.println("Client: Received response -->.");
-        }
+		// Clean up
+		out.close();
+		in.close();
+		socket.close();
+	}
 
-        for (int i = 0; i < matrixSize; i++) {
-            for (int j = 0; j < matrixSize; j++) {
-                System.out.print(fromServer[i][j] + " ");
-            }
-            System.out.println();
-        }
+	private static void generateMatrices(List<int[][]> fromClient, int size, int matrixes) {
+		for (int i = 0; i < matrixes; i++) {
+			int[][] matrix = new int[size][size];
+			Random rand = new Random();
 
-        long duration = clockEnd - clockStart; // Time in nanoseconds
-        double durationInMillis = duration / 1_000_000.0; // Convert to milliseconds
+			for (int j = 0; j < size; j++) {
+				for (int k = 0; k < size; k++) {
+					matrix[j][k] = rand.nextInt(5); // Random small values to ensure it doesn't get out of hand
+				}
+			}
 
-        // Print the time taken
-        System.out.println("\nTime taken for Strassen multiplication: " + durationInMillis + " ms");
+			fromClient.add(matrix);
+		}
+	}
 
-        out.close();
-        in.close();
-        socket.close();
-    }
+	private static void printMatrix(int[][] matrix, int size) {
+		for (int i = 0; i < size; i++) {
+			for (int j = 0; j < size; j++) {
+				System.out.print(matrix[i][j] + " ");
+			}
+			System.out.println();
+		}
+	}
 
-    private static void generateMatrices(List<int[][]> fromClient, int size, int matrixes) {
-        for (int i = 0; i < matrixes; i++) {
-            int[][] matrix = new int[size][size];
-            Random rand = new Random();
+	private static boolean compareMatrices(int[][] matrix1, int[][] matrix2) {
+		if (matrix1.length != matrix2.length || matrix1[0].length != matrix2[0].length) {
+			return false;
+		}
 
-            for (int j = 0; j < size; j++) {
-                for (int k = 0; k < size; k++) {
-                    matrix[j][k] = rand.nextInt(5); // Random small values to ensure it doesn't get out of hand
-                }
-            }
-
-            fromClient.add(matrix);
-        }
-    }
+		for (int i = 0; i < matrix1.length; i++) {
+			for (int j = 0; j < matrix1[0].length; j++) {
+				if (matrix1[i][j] != matrix2[i][j]) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
 }
