@@ -79,9 +79,9 @@ public class TCPClient {
 		// Optional: Print matrices for verification (commented out for large matrices)
 		/*
         System.out.println("\nSingle-threaded result:");
-        printMatrix(singleThreadResult);
+        printMatrix(singleThreadResult, matrixSize);
         System.out.println("\nMulti-threaded result:");
-        printMatrix(multiThreadResult);
+        printMatrix(multiThreadResult, matrixSize);
 		 */
 
 		// Clean up
